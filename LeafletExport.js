@@ -151,7 +151,8 @@ class LeafletExporter {
                     resolve()
                 }
                 image.onerror = () => {
-                    reject(new Error(`Marker image loading failed: ${url}`))
+                    console.warn(`Marker image loading failed: ${url}`)
+                    resolve()
                 }
             })
             image.src = url
