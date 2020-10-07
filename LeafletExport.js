@@ -99,7 +99,7 @@ class LeafletExporter {
                 } else if (layer instanceof L.TileLayer) {
                     promise = this._FetchTileLayer(layer)
 
-                } else if (layer instanceof L.Circle) {
+                } else if (layer instanceof L.CircleMarker) {
                     if (!this.#circles[layer._leaflet_id]) {
                         this.#circles[layer._leaflet_id] = layer
                     }
@@ -141,7 +141,7 @@ class LeafletExporter {
             let image = new Image()
             image.crossOrigin = "Anonymous"
             let url = layer._icon.src
-            let promise = new Promise((resolve, reject) => {
+            let promise = new Promise(resolve => {
                 image.onload = () => {
                     this.#markers[layer._leaflet_id] = {
                         img: image,
@@ -235,14 +235,26 @@ class LeafletExporter {
         } else {
             url = layer.getTileUrl(tilePoint)
         }
-        let promise = new Promise((resolve, reject) => {
+        let promise = new Promise(resolve => {
             image.onload = () => {
-                tileLayer.tileImages.push({
-                    img: image,
-                    x: tilePos.x,
-                    y: tilePos.y
+                let promise
+                if (layer.transformTileImage) {
+                    promise = layer.transformTileImage(image)
+                } else {
+                    promise = Promise.resolve()
+                }
+                promise.then(() => {
+                    tileLayer.tileImages.push({
+                                                  img: image,
+                                                  x: tilePos.x,
+                                                  y: tilePos.y
+                                              })
+                    resolve()
+
+                }).catch(error => {
+                    console.warn("Tile image transformation failed: " + error)
+                    resolve()
                 })
-                resolve()
             }
             image.onerror = () => {
                 console.warn(`Tile image loading failed: ${url}`)
@@ -255,7 +267,7 @@ class LeafletExporter {
 
     _IsPointInViewport(point) {
         return (point.x >= 0 && point.y >= 0 &&
-                point.x < this.#canvas.width && point.y <= this.#canvas.height)
+            point.x < this.#canvas.width && point.y <= this.#canvas.height)
     }
 
     _DrawPath(path) {
@@ -278,8 +290,15 @@ class LeafletExporter {
         let point = this.#map.project(layer._latlng)
         point = point.subtract(new L.Point(this.#bounds.min.x, this.#bounds.min.y))
 
-        let r = Math.max(Math.round(layer._radius), 1)
-        let s = (Math.max(Math.round(layer._radiusY), 1) || r) / r
+        let r, s
+
+        if (layer._radius !== undefined) {
+            r = Math.max(Math.round(layer._radius), 1)
+            s = (Math.max(Math.round(layer._radiusY), 1) || r) / r
+        } else {
+            r = layer.options.radius
+            s = 1
+        }
 
         if (s !== 1) {
             this.#ctx.save()
